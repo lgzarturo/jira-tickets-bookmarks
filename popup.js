@@ -1,60 +1,86 @@
 document.addEventListener('DOMContentLoaded', function() {
-  // Cargar tareas guardadas
   loadTasks();
 
-  // Evento para agregar la URL actual
   document.getElementById('addCurrentPage').addEventListener('click', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       const url = tabs[0].url;
-      // Verificar si es una URL de Jira
       if (url.includes('.atlassian.net')) {
-        // Extraer el código del ticket de la URL
         const ticketCode = url.split('/').pop();
         addTask(ticketCode, url);
       } else {
-        alert('La URL actual no parece ser un ticket de Jira');
+        alert('La URL actual no es un ticket válido de Jira (.atlassian.net)');
       }
     });
   });
 
-  // Evento para descargar CSV
   document.getElementById('downloadCSV').addEventListener('click', downloadCSV);
 });
 
 function loadTasks() {
   chrome.storage.sync.get(['tasks'], function(result) {
     const tasks = result.tasks || [];
-    const taskList = document.getElementById('taskList');
-    taskList.innerHTML = '';
+    const activeTasks = tasks.filter(task => !task.completed);
+    const completedTasks = tasks.filter(task => task.completed);
 
-    tasks.forEach((task, index) => {
-      const taskElement = createTaskElement(task, index);
-      taskList.appendChild(taskElement);
-    });
+    renderTaskList('activeTasks', activeTasks);
+    renderTaskList('completedTasks', completedTasks);
+  });
+}
+
+function renderTaskList(containerId, tasks) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = tasks.length === 0 ?
+    '<div class="empty-state">No hay tickets en esta lista</div>' : '';
+
+  tasks.forEach((task, index) => {
+    const taskElement = createTaskElement(task, index);
+    container.appendChild(taskElement);
   });
 }
 
 function createTaskElement(task, index) {
   const div = document.createElement('div');
-  div.className = 'task-item';
+  div.className = `task-item ${task.completed ? 'completed' : ''}`;
 
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.checked = task.completed;
   checkbox.addEventListener('change', () => updateTaskStatus(index, checkbox.checked));
 
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'task-content';
+
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
   titleInput.value = task.title;
-  titleInput.addEventListener('change', () => updateTaskTitle(index, titleInput.value));
+  titleInput.readOnly = task.completed;
+  if (!task.completed) {
+    titleInput.addEventListener('change', () => updateTaskTitle(index, titleInput.value));
+  }
 
   const dateSpan = document.createElement('span');
   dateSpan.className = 'completion-date';
-  dateSpan.textContent = task.completionDate || '';
+  dateSpan.textContent = task.completionDate ? `Completado: ${task.completionDate}` : '';
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'task-actions';
+
+  const linkButton = document.createElement('button');
+  linkButton.className = 'btn btn-link';
+  linkButton.textContent = 'Ir al ticket';
+  linkButton.addEventListener('click', () => {
+    chrome.tabs.create({ url: task.url });
+  });
+
+  contentDiv.appendChild(titleInput);
+  if (task.completed) {
+    contentDiv.appendChild(dateSpan);
+  }
 
   div.appendChild(checkbox);
-  div.appendChild(titleInput);
-  div.appendChild(dateSpan);
+  div.appendChild(contentDiv);
+  div.appendChild(actionsDiv);
+  actionsDiv.appendChild(linkButton);
 
   return div;
 }
@@ -103,12 +129,12 @@ function downloadCSV() {
   chrome.storage.sync.get(['tasks'], function(result) {
     const tasks = result.tasks || [];
     const csvContent = [
-      ['Código', 'Título', 'URL', 'Completado', 'Fecha de finalización'],
+      ['Código', 'Título', 'URL', 'Estado', 'Fecha de finalización'],
       ...tasks.map(task => [
         task.code,
         task.title,
         task.url,
-        task.completed ? 'Sí' : 'No',
+        task.completed ? 'Finalizado' : 'Activo',
         task.completionDate || ''
       ])
     ].map(row => row.join(',')).join('\n');
