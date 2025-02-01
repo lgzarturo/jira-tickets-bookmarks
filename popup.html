@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Jira Task Manager</title>
+  <style>
+    body {
+      width: 400px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+
+    .task-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .task-item input[type="checkbox"] {
+      margin-right: 10px;
+    }
+
+    .task-item input[type="text"] {
+      flex-grow: 1;
+      margin: 0 10px;
+      padding: 5px;
+    }
+
+    .task-item .completion-date {
+      font-size: 12px;
+      color: #666;
+      margin-left: 10px;
+    }
+
+    .buttons {
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    button {
+      padding: 8px 15px;
+      background-color: #0052cc;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0047b3;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div class="task-list" id="taskList"></div>
+  <div class="buttons">
+    <button id="addCurrentPage">Agregar URL actual</button>
+    <button id="downloadCSV">Descargar CSV</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+
+</html>
