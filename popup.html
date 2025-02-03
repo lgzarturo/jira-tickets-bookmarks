@@ -187,11 +187,150 @@
       padding: 8px 15px;
     }
 
+    .project-header {
+      margin: -15px -15px 15px -15px;
+      padding: 15px;
+      background: #f4f5f7;
+      border-bottom: 1px solid #dfe1e6;
+    }
+
+    .project-selector {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .project-info {
+      flex-grow: 1;
+    }
+
+    .project-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 0;
+    }
+
+    .project-description {
+      font-size: 14px;
+      color: #6b778c;
+      margin: 5px 0 0 0;
+    }
+
+    .project-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .project-list-modal {
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .project-card {
+      padding: 15px;
+      border: 1px solid #dfe1e6;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .project-card:hover {
+      background-color: #f4f5f7;
+    }
+
+    .project-card.active {
+      border-color: #0052cc;
+      background-color: #f0f7ff;
+    }
+
+    .new-project-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-group label {
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      padding: 8px;
+      border: 1px solid #dfe1e6;
+      border-radius: 4px;
+    }
+
+    .modal-footer {
+      margin-top: 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 80%;
+      max-width: 500px;
+      position: relative;
+    }
+
+    .close-modal {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 5px;
+    }
+
+    .close-modal:hover {
+      color: #666;
+    }
+
   </style>
 </head>
 
 <body>
+  <div class="project-header">
+    <div class="project-selector">
+      <div class="project-info">
+        <h1 class="project-title" id="currentProjectTitle">Cargando proyecto...</h1>
+        <p class="project-description" id="currentProjectDescription"></p>
+      </div>
+      <div class="project-actions">
+        <button id="switchProject" class="btn btn-secondary">Cambiar Proyecto</button>
+        <button id="exportProject" class="btn btn-secondary">Exportar</button>
+      </div>
+    </div>
+  </div>
   <div class="container">
+
     <div class="task-column">
       <div class="header">
         <h2 class="section-title">Tickets Activos</h2>
@@ -228,6 +367,48 @@
           <p class="warning-text">Esta acción eliminará todos los tickets guardados y no se puede deshacer.</p>
           <button id="resetDatabase" class="btn btn-danger">Borrar todos los datos</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="projectsModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Gestionar Proyectos</h3>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="project-list-modal" id="projectsList"></div>
+        <div class="modal-footer">
+          <input type="file" id="importProject" accept=".json" style="display: none;">
+          <button id="importProjectBtn" class="btn btn-secondary">Importar Proyecto</button>
+          <button id="newProjectBtn" class="btn btn-primary">Nuevo Proyecto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="newProjectModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Nuevo Proyecto</h3>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form class="new-project-form" id="newProjectForm">
+          <div class="form-group">
+            <label for="projectTitle">Título del Proyecto*</label>
+            <input type="text" id="projectTitle" required>
+          </div>
+          <div class="form-group">
+            <label for="projectDescription">Descripción</label>
+            <textarea id="projectDescription" rows="3"></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary close-modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear Proyecto</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

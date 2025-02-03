@@ -1,17 +1,91 @@
 document.addEventListener('DOMContentLoaded', function() {
+  initializeProjectSystem();
   loadTasks();
 
   const modal = document.getElementById("settingsModal");
   const openSettingsBtn = document.getElementById("openSettings");
-  const closeModalBtn = document.querySelector(".close-modal");
-  const resetDatabaseBtn = document.getElementById("resetDatabase");
+  const newProjectBtn = document.getElementById("newProjectBtn");
+
+  document.querySelectorAll('.close-modal').forEach(button => {
+    button.addEventListener('click', function() {
+      const modal = this.closest('.modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    });
+  });
+
+  // Cerrar modales al hacer click fuera
+  window.addEventListener('click', function(event) {
+    if (event.target.classList.contains('modal')) {
+      event.target.style.display = 'none';
+    }
+  });
+
+  // Actualizar el resetDatabase
+  document.getElementById('resetDatabase').addEventListener('click', resetDatabase);
+
+  // Eventos para gestión de proyectos
+  document.getElementById('switchProject').addEventListener('click', () => {
+    document.getElementById('projectsModal').style.display = 'flex';
+    loadProjectsList();
+  });
+
+  document.getElementById('exportProject').addEventListener('click', () => {
+    chrome.storage.sync.get(['currentProject'], function(result) {
+      exportProject(result.currentProject);
+    });
+  });
+
+  document.getElementById('importProjectBtn').addEventListener('click', () => {
+    document.getElementById('importProject').click();
+  });
+
+  document.getElementById('importProject').addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      importProject(e.target.files[0]);
+      e.target.value = ''; // Resetear input
+    }
+    loadProjectsList();
+  });
+
+  newProjectBtn.addEventListener('click', () => {
+    const projectsContainer = document.getElementById('projectsList');
+    // Remove all items
+    projectsContainer.innerHTML = '';
+    projectsContainer.appendChild(document.getElementById("newProjectForm"));
+  })
+
+  document.getElementById('newProjectForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const title = document.getElementById('projectTitle').value;
+    const description = document.getElementById('projectDescription').value;
+
+    const newProject = {
+      id: 'project_' + Date.now(),
+      title: title,
+      description: description,
+      tasks: []
+    };
+
+    chrome.storage.sync.get(['projects'], function(result) {
+      const projects = result.projects || [];
+      projects.push(newProject);
+
+      chrome.storage.sync.set({
+        projects: projects,
+        currentProject: newProject.id
+      }, function() {
+        document.getElementById('newProjectModal').style.display = 'none';
+        document.getElementById('projectTitle').value = '';
+        document.getElementById('projectDescription').value = '';
+        loadTasks();
+      });
+    });
+  });
 
   openSettingsBtn.addEventListener("click", function() {
     modal.style.display = "flex";
-  });
-
-  closeModalBtn.addEventListener("click", function() {
-    modal.style.display = "none";
   });
 
   window.addEventListener("click", function(event) {
@@ -19,16 +93,6 @@ document.addEventListener('DOMContentLoaded', function() {
       modal.style.display = "none";
     }
   })
-
-  resetDatabaseBtn.addEventListener("click", function() {
-    if (confirm("¿Estás seguro de que quieres borrar todos los tickets guardados?")) {
-      chrome.storage.sync.set({tasks: []}, function() {
-        loadTasks();
-        modal.style.display = "none";
-        alert("Todos los tickets fueron borrados.");
-      });
-    }
-  });
 
   document.getElementById('addCurrentPage').addEventListener('click', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -45,11 +109,64 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('downloadCSV').addEventListener('click', downloadCSV);
 });
 
+function loadProjectsList() {
+  chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+    const projectsContainer = document.getElementById('projectsList');
+    projectsContainer.innerHTML = '';
+
+    result.projects.forEach(project => {
+      const projectCard = document.createElement('div');
+      projectCard.className = `project-card ${project.id === result.currentProject ? 'active' : ''}`;
+
+      const title = document.createElement('h3');
+      title.textContent = project.title;
+
+      const description = document.createElement('p');
+      description.textContent = project.description || '';
+
+      projectCard.appendChild(title);
+      projectCard.appendChild(description);
+
+      projectCard.addEventListener('click', () => {
+        chrome.storage.sync.set({ currentProject: project.id }, () => {
+          document.getElementById('projectsModal').style.display = 'none';
+          loadTasks();
+        });
+      });
+
+      projectsContainer.appendChild(projectCard);
+    });
+  });
+}
+
+function resetDatabase() {
+  if (confirm("¿Estás seguro de que quieres borrar todos los datos? Esta acción no se puede deshacer.")) {
+    chrome.storage.sync.set({
+      projects: [{
+        id: 'default',
+        title: 'Proyecto Principal',
+        description: 'Proyecto por defecto',
+        tasks: []
+      }],
+      currentProject: 'default'
+    }, function() {
+      loadTasks();
+      document.getElementById('settingsModal').style.display = 'none';
+      alert("Todos los datos han sido borrados.");
+    });
+  }
+}
+
 function loadTasks() {
-  chrome.storage.sync.get(['tasks'], function(result) {
-    const tasks = result.tasks || [];
-    const activeTasks = tasks.filter(task => !task.completed);
-    const completedTasks = tasks.filter(task => task.completed);
+  chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+    const currentProject = result.projects.find(p => p.id === result.currentProject);
+    if (!currentProject) return;
+
+    document.getElementById('currentProjectTitle').textContent = currentProject.title;
+    document.getElementById('currentProjectDescription').textContent = currentProject.description || '';
+
+    const activeTasks = currentProject.tasks.filter(task => !task.completed);
+    const completedTasks = currentProject.tasks.filter(task => task.completed);
 
     renderTaskList('activeTasks', activeTasks);
     renderTaskList('completedTasks', completedTasks);
@@ -214,46 +331,53 @@ async function extractTitleFromJiraPage(url) {
 }
 
 async function addTask(ticketCode, url) {
-  chrome.storage.sync.get(['tasks'], async function(result) {
-    const tasks = result.tasks || [];
+  chrome.storage.sync.get(['projects', 'currentProject'], async function(result) {
+    const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
+    if (projectIndex === -1) return;
 
-    // Verificar si el ticket ya existe
-    const ticketExists = tasks.some(task => task.code === ticketCode || task.url === url);
+    const project = result.projects[projectIndex];
+
+    // Verificar si el ticket ya existe en el proyecto actual
+    const ticketExists = project.tasks.some(task => task.code === ticketCode || task.url === url);
 
     if (ticketExists) {
       alert('Este ticket ya está en tu lista');
       return;
     }
 
-    let title = ticketCode
-
     try {
-      title = await extractTitleFromJiraPage(url) || ticketCode;
+      const pageTitle = await extractTitleFromJiraPage(url) || ticketCode;
+
+      project.tasks.push({
+        code: ticketCode,
+        url: url,
+        title: pageTitle,
+        completed: false,
+        completionDate: null
+      });
+
+      result.projects[projectIndex] = project;
+      chrome.storage.sync.set({ projects: result.projects }, function() {
+        loadTasks();
+      });
     } catch (error) {
       console.error('Error al agregar el ticket:', error);
       alert('No se pudo obtener el título del ticket. Se usará el código como título.');
     }
-
-    tasks.push({
-      code: ticketCode,
-      url: url,
-      title: title,
-      completed: false,
-      completionDate: null
-    });
-
-    chrome.storage.sync.set({tasks: tasks}, function() {
-      loadTasks();
-    });
   });
 }
 
 function deleteTask(index) {
   if (confirm('¿Estás seguro de que deseas eliminar este ticket?')) {
-    chrome.storage.sync.get(['tasks'], function(result) {
-      const tasks = result.tasks;
-      tasks.splice(index, 1);
-      chrome.storage.sync.set({tasks: tasks}, function() {
+    chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+      const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
+      if (projectIndex === -1) return;
+
+      const project = result.projects[projectIndex];
+      project.tasks.splice(index, 1);
+
+      result.projects[projectIndex] = project;
+      chrome.storage.sync.set({ projects: result.projects }, function() {
         loadTasks();
       });
     });
@@ -261,12 +385,16 @@ function deleteTask(index) {
 }
 
 function updateTaskStatus(index, completed) {
-  chrome.storage.sync.get(['tasks'], function(result) {
-    const tasks = result.tasks;
-    tasks[index].completed = completed;
-    tasks[index].completionDate = completed ? new Date().toLocaleDateString() : null;
+  chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+    const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
+    if (projectIndex === -1) return;
 
-    chrome.storage.sync.set({tasks: tasks}, function() {
+    const project = result.projects[projectIndex];
+    project.tasks[index].completed = completed;
+    project.tasks[index].completionDate = completed ? new Date().toLocaleDateString() : null;
+
+    result.projects[projectIndex] = project;
+    chrome.storage.sync.set({ projects: result.projects }, function() {
       loadTasks();
     });
   });
@@ -305,4 +433,82 @@ function downloadCSV() {
     a.click();
     URL.revokeObjectURL(url);
   });
+}
+
+function initializeProjectSystem() {
+  chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+    if (!result.projects) {
+      const defaultProject = {
+        id: 'default',
+        title: 'Proyecto Principal',
+        description: 'Proyecto por defecto',
+        tasks: []
+      };
+      chrome.storage.sync.set({
+        projects: [defaultProject],
+        currentProject: 'default'
+      });
+    }
+  });
+}
+
+function createNewProject(title, description = '') {
+  return {
+    id: 'project_' + Date.now(),
+    title,
+    description,
+    tasks: []
+  };
+}
+
+function saveProject(project) {
+  chrome.storage.sync.get(['projects'], function(result) {
+    const projects = result.projects || [];
+    const existingIndex = projects.findIndex(p => p.id === project.id);
+
+    if (existingIndex >= 0) {
+      projects[existingIndex] = project;
+    } else {
+      projects.push(project);
+    }
+
+    chrome.storage.sync.set({ projects: projects }, function() {
+      loadTasks(); // Recargar la vista
+    });
+  });
+}
+
+function exportProject(projectId) {
+  chrome.storage.sync.get(['projects'], function(result) {
+    const project = result.projects.find(p => p.id === projectId);
+    if (project) {
+      const projectData = JSON.stringify(project, null, 2);
+      const blob = new Blob([projectData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.title.replace(/\s+/g, '_')}_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  });
+}
+
+function importProject(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const project = JSON.parse(e.target.result);
+      if (project.id && project.title && Array.isArray(project.tasks)) {
+        project.id = 'project_' + Date.now(); // Generar nuevo ID para evitar conflictos
+        saveProject(project);
+        alert('El proyecto ha sido importado correctamente.');
+      } else {
+        alert('El archivo no tiene el formato correcto de un proyecto.');
+      }
+    } catch (error) {
+      alert('Error al importar el proyecto: ' + error.message);
+    }
+  };
+  reader.readAsText(file);
 }
