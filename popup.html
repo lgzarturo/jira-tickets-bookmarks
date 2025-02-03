@@ -212,6 +212,24 @@
   <div class="controls">
     <button id="addCurrentPage" class="btn btn-primary">Agregar URL actual</button>
     <button id="downloadCSV" class="btn btn-secondary">Descargar CSV</button>
+    <button id="openSettings" class="btn btn-secondary">Configuración</button>
+  </div>
+
+  <!-- Modal de configuración -->
+  <div id="settingsModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Configuración</h3>
+        <button class="close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-section">
+          <h4>Base de datos</h4>
+          <p class="warning-text">Esta acción eliminará todos los tickets guardados y no se puede deshacer.</p>
+          <button id="resetDatabase" class="btn btn-danger">Borrar todos los datos</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>

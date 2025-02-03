@@ -1,6 +1,35 @@
 document.addEventListener('DOMContentLoaded', function() {
   loadTasks();
 
+  const modal = document.getElementById("settingsModal");
+  const openSettingsBtn = document.getElementById("openSettings");
+  const closeModalBtn = document.querySelector(".close-modal");
+  const resetDatabaseBtn = document.getElementById("resetDatabase");
+
+  openSettingsBtn.addEventListener("click", function() {
+    modal.style.display = "flex";
+  });
+
+  closeModalBtn.addEventListener("click", function() {
+    modal.style.display = "none";
+  });
+
+  window.addEventListener("click", function(event) {
+    if (event.target == modal) {
+      modal.style.display = "none";
+    }
+  })
+
+  resetDatabaseBtn.addEventListener("click", function() {
+    if (confirm("¿Estás seguro de que quieres borrar todos los tickets guardados?")) {
+      chrome.storage.sync.set({tasks: []}, function() {
+        loadTasks();
+        modal.style.display = "none";
+        alert("Todos los tickets fueron borrados.");
+      });
+    }
+  });
+
   document.getElementById('addCurrentPage').addEventListener('click', function() {
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       const url = tabs[0].url;
@@ -49,6 +78,12 @@ function createTaskElement(task, index) {
   titleInput.type = 'text';
   titleInput.value = task.title;
   titleInput.readOnly = task.completed;
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'task-title';
+  titleDiv.textContent = task.title;
+  titleDiv.title = task.title;
+
   if (!task.completed) {
     titleInput.addEventListener('change', () => updateTaskTitle(index, titleInput.value));
   }
@@ -131,7 +166,8 @@ function createTaskElement(task, index) {
   dropdownDiv.appendChild(dropdownToggle);
   dropdownDiv.appendChild(dropdownMenu);
 
-  contentDiv.appendChild(titleInput);
+  contentDiv.appendChild(titleDiv);
+  //contentDiv.appendChild(titleInput);
   if (task.completed) {
     contentDiv.appendChild(dateSpan);
   }
@@ -144,8 +180,41 @@ function createTaskElement(task, index) {
   return div;
 }
 
-function addTask(ticketCode, url) {
-  chrome.storage.sync.get(['tasks'], function(result) {
+async function extractTitleFromJiraPage(url) {
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const titleTag = doc.querySelector("title")?.textContent.trim();
+    let title = '';
+    if (titleTag) {
+      title = titleTag.textContent.split(' - ')[0];
+      console.log("tag title", title);
+      alert("tag title:" + title);
+    }
+    if (title === '') {
+      const title = doc.querySelector('h1[data-test-id="issue.views.issue-base.foundation.summary.heading"]')?.textContent ||
+                 doc.querySelector('[data-testid="issue.views.issue-base.foundation.summary.heading"]')?.textContent ||
+                 doc.title.split(' - ')[0] ||
+                 '';
+      console.log("h1", title);
+      alert("h1:" + title);
+    }
+    title = title.trim();
+    alert("" + title);
+    if (title === 'Jira') {
+      return null;
+    }
+    return title.trim();
+  } catch (error) {
+    console.error("Error al extraer el título del ticket de Jira:", error);
+    return null;
+  }
+}
+
+async function addTask(ticketCode, url) {
+  chrome.storage.sync.get(['tasks'], async function(result) {
     const tasks = result.tasks || [];
 
     // Verificar si el ticket ya existe
@@ -156,10 +225,19 @@ function addTask(ticketCode, url) {
       return;
     }
 
+    let title = ticketCode
+
+    try {
+      title = await extractTitleFromJiraPage(url) || ticketCode;
+    } catch (error) {
+      console.error('Error al agregar el ticket:', error);
+      alert('No se pudo obtener el título del ticket. Se usará el código como título.');
+    }
+
     tasks.push({
       code: ticketCode,
       url: url,
-      title: ticketCode,
+      title: title,
       completed: false,
       completionDate: null
     });

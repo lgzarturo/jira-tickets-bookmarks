@@ -3,7 +3,7 @@
   "name": "Jira Task Manager",
   "version": "1.0",
   "description": "Gestiona tus tickets de Jira como una lista de tareas pendientes",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "scripting"],
   "action": {
     "default_popup": "popup.html"
   },
