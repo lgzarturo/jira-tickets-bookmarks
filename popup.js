@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   newProjectBtn.addEventListener('click', () => {
     const projectsContainer = document.getElementById('projectsList');
-    // Remove all items
+    // TODO: Es necesario mejorar la forma en como se muestra el formulario de nuevo proyecto
     projectsContainer.innerHTML = '';
     projectsContainer.appendChild(document.getElementById("newProjectForm"));
   })
@@ -191,10 +191,12 @@ function createTaskElement(task, index) {
   const contentDiv = document.createElement('div');
   contentDiv.className = 'task-content';
 
-  const titleInput = document.createElement('input');
-  titleInput.type = 'text';
-  titleInput.value = task.title;
-  titleInput.readOnly = task.completed;
+  const codeHiddenInput = document.createElement("input");
+  codeHiddenInput.type = "hidden";
+  codeHiddenInput.name = "code";
+  codeHiddenInput.value = task.code;
+  codeHiddenInput.readOnly = true;
+  codeHiddenInput.id = "code_" + task.code;
 
   const codeDiv = document.createElement("div");
   codeDiv.className = "task-code";
@@ -205,10 +207,6 @@ function createTaskElement(task, index) {
   titleDiv.className = 'task-title';
   titleDiv.textContent = task.title;
   titleDiv.title = task.title;
-
-  if (!task.completed) {
-    titleInput.addEventListener('change', () => updateTaskTitle(index, titleInput.value));
-  }
 
   const dateSpan = document.createElement('span');
   dateSpan.className = 'completion-date';
@@ -233,7 +231,8 @@ function createTaskElement(task, index) {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = false;
-    checkbox.addEventListener('change', () => updateTaskStatus(index, checkbox.checked));
+    checkbox.setAttribute("data-reference-id", "code_" + task.code);
+    checkbox.addEventListener('change', () => updateTaskStatus(task.code, checkbox.checked));
     div.appendChild(checkbox);
   }
 
@@ -271,7 +270,7 @@ function createTaskElement(task, index) {
     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
     </svg>
     `;
-    reactivateButton.addEventListener('click', () => updateTaskStatus(index, false));
+    reactivateButton.addEventListener('click', () => updateTaskStatus(task.code, false));
     dropdownMenu.appendChild(reactivateButton);
   }
 
@@ -282,12 +281,13 @@ function createTaskElement(task, index) {
   <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
   </svg>
   `;
-  deleteButton.addEventListener('click', () => deleteTask(index));
+  deleteButton.addEventListener('click', () => deleteTask(task.code));
   dropdownMenu.appendChild(deleteButton);
 
   dropdownDiv.appendChild(dropdownToggle);
   dropdownDiv.appendChild(dropdownMenu);
 
+  contentDiv.appendChild(codeHiddenInput);
   contentDiv.appendChild(codeDiv);
   contentDiv.appendChild(titleDiv);
   if (task.completed) {
@@ -363,14 +363,19 @@ async function addTask(ticketCode, url) {
   });
 }
 
-function deleteTask(index) {
+function deleteTask(ticketCode) {
   if (confirm('¿Estás seguro de que deseas eliminar este ticket?')) {
     chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
       const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
       if (projectIndex === -1) return;
-
       const project = result.projects[projectIndex];
-      project.tasks.splice(index, 1);
+
+      for (let i = 0; i < project.tasks.length; i++) {
+        if (project.tasks[i].code === ticketCode) {
+          project.tasks.splice(i, 1);
+          break;
+        }
+      }
 
       result.projects[projectIndex] = project;
       chrome.storage.sync.set({ projects: result.projects }, function() {
@@ -380,28 +385,22 @@ function deleteTask(index) {
   }
 }
 
-function updateTaskStatus(index, completed) {
+function updateTaskStatus(taskCode, completed) {
   chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
     const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
     if (projectIndex === -1) return;
 
     const project = result.projects[projectIndex];
-    project.tasks[index].completed = completed;
-    project.tasks[index].completionDate = completed ? new Date().toLocaleDateString() : null;
+    for (let i = 0; i < project.tasks.length; i++) {
+      if (project.tasks[i].code === taskCode) {
+        project.tasks[i].completed = completed;
+        project.tasks[i].completionDate = completed ? new Date().toLocaleDateString() : null;
+        break;
+      }
+    }
 
     result.projects[projectIndex] = project;
     chrome.storage.sync.set({ projects: result.projects }, function() {
-      loadTasks();
-    });
-  });
-}
-
-function updateTaskTitle(index, newTitle) {
-  chrome.storage.sync.get(['tasks'], function(result) {
-    const tasks = result.tasks;
-    tasks[index].title = newTitle;
-
-    chrome.storage.sync.set({tasks: tasks}, function() {
       loadTasks();
     });
   });
@@ -463,12 +462,23 @@ function createNewProject(title, description = '') {
 function saveProject(project) {
   chrome.storage.sync.get(['projects'], function(result) {
     const projects = result.projects || [];
-    const existingIndex = projects.findIndex(p => p.id === project.id);
 
-    if (existingIndex >= 0) {
-      projects[existingIndex] = project;
-    } else {
-      projects.push(project);
+    if (!project.id) {
+      project.id = 'project_' + Date.now();
+    }
+
+    let updatedProjects;
+    try {
+      const existingIndex = projects.findIndex(p => p.id === project.id);
+      if (existingIndex >= 0) {
+        updatedProjects = [...projects.slice(0, existingIndex), ...projects.slice(existingIndex + 1)];
+      } else {
+        updatedProjects = [project, ...projects];
+      }
+    } catch (error) {
+      console.error("Error saving project:", error);
+      alert("An unexpected error occurred while trying to save the project. Please try again.");
+      return;
     }
 
     chrome.storage.sync.set({ projects: projects }, function() {
