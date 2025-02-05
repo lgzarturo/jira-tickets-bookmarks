@@ -297,33 +297,24 @@ function createTaskElement(task, index) {
   return div;
 }
 
-async function extractTitleFromJiraPage(url) {
+async function extractTitleFromJiraPage(ticketCode) {
   try {
-    const response = await fetch(url);
-    const html = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const titleTag = doc.querySelector("title")?.textContent.trim();
-    let title = '';
-    if (titleTag) {
-      title = titleTag.textContent.split(' - ')[0];
-      console.log("tag title", title);
-      alert("tag title:" + title);
-    }
-    if (title === '') {
-      const title = doc.querySelector('h1[data-test-id="issue.views.issue-base.foundation.summary.heading"]')?.textContent ||
-                 doc.querySelector('[data-testid="issue.views.issue-base.foundation.summary.heading"]')?.textContent ||
-                 doc.title.split(' - ')[0] ||
-                 '';
-      console.log("h1", title);
-      alert("h1:" + title);
-    }
-    title = title.trim();
-    alert("" + title);
-    if (title === 'Jira') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const title = await new Promise((resolve) => {
+      console.log("tab.id", tab.id);
+      chrome.tabs.sendMessage(tab.id, { action: "getH1" }, (response) => {
+        if (response === undefined) {
+          resolve(null);
+          return;
+        }
+        resolve(response.content);
+      });
+    });
+
+    if (title === null || title === 'Jira') {
       return null;
     }
-    return title.trim();
+    return title.replace(`[${ticketCode}] `, '').split(' - ')[0].trim();
   } catch (error) {
     console.error("Error al extraer el título del ticket de Jira:", error);
     return null;
@@ -346,7 +337,7 @@ async function addTask(ticketCode, url) {
     }
 
     try {
-      const pageTitle = await extractTitleFromJiraPage(url) || ticketCode;
+      const pageTitle = await extractTitleFromJiraPage(ticketCode) || ticketCode;
 
       project.tasks.push({
         code: ticketCode,
@@ -412,8 +403,11 @@ function updateTaskTitle(index, newTitle) {
 }
 
 function downloadCSV() {
-  chrome.storage.sync.get(['tasks'], function(result) {
-    const tasks = result.tasks || [];
+  chrome.storage.sync.get(['projects', 'currentProject'], function(result) {
+    const projectIndex = result.projects.findIndex(p => p.id === result.currentProject);
+    if (projectIndex === -1) return;
+    const project = result.projects[projectIndex];
+    const tasks = project.tasks || [];
     const csvContent = [
       ['Código', 'Título', 'URL', 'Estado', 'Fecha de finalización'],
       ...tasks.map(task => [
