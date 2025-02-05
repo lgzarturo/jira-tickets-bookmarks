@@ -196,6 +196,11 @@ function createTaskElement(task, index) {
   titleInput.value = task.title;
   titleInput.readOnly = task.completed;
 
+  const codeDiv = document.createElement("div");
+  codeDiv.className = "task-code";
+  codeDiv.textContent = task.code;
+  codeDiv.title = task.code;
+
   const titleDiv = document.createElement('div');
   titleDiv.className = 'task-title';
   titleDiv.textContent = task.title;
@@ -283,8 +288,8 @@ function createTaskElement(task, index) {
   dropdownDiv.appendChild(dropdownToggle);
   dropdownDiv.appendChild(dropdownMenu);
 
+  contentDiv.appendChild(codeDiv);
   contentDiv.appendChild(titleDiv);
-  //contentDiv.appendChild(titleInput);
   if (task.completed) {
     contentDiv.appendChild(dateSpan);
   }
